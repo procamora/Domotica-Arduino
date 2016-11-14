@@ -1,12 +1,10 @@
-/*******************************************************************
-    this is a basic example how to program a Telegram Bot
-    using TelegramBOT library on ESP8266
- *                                                                 *
-    Open a conversation with the bot, it will echo your messages
-    https://web.telegram.org/#/im?p=@EchoBot_bot
- *                                                                 *
-    written by Giacarlo Bacchio
- *******************************************************************/
+/**
+   @file Domotica-Arduino.cpp
+   @brief Gestion de un rele a traves de telegram
+
+   @author Pablo Rocamora pablojoserocamora@gmail.com
+   @date 13/11/2016
+*/
 
 
 #include <ESP8266WiFi.h>
@@ -28,6 +26,8 @@
 #define DHTTYPE DHT11   // DHT 11
 DHT dht(DHTPIN, DHTTYPE);    // Initialize DHT sensor.
 
+#define TAM_ARRAY 3
+
 // Initialize Wifi connection to the router
 const char* ssid = SSID_WIFI;
 const char* password = PASS_WIFI;
@@ -40,7 +40,7 @@ TelegramBOT bot(BOTtoken, BOTname, BOTusername);
 int admin_tg = ID_TELEGRAM;         //PONER EN CREDENTIAL.H
 int Bot_mtbs = 2000; //mean time between scan messages
 unsigned long Bot_lasttime;   //last time messages' scan has been done
-bool Start = false;
+//bool Start = false;
 
 
 
@@ -73,40 +73,88 @@ void setup() {
 }
 
 
+void set_rele(String accion, String user) {
+  String msg = "";
+  if (accion == "on") {
+    digitalWrite(RELE_UNO, HIGH);    // turn the LED off (LOW is the voltage level)
+    msg = "Encendido rele 1";
+  }
+  else if (accion == "off") {
+    digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
+    msg = "Apagado rele 1";
+  }
+  bot.sendMessage(user, msg, "");
+}
+
+
+void show_start(String user) {
+  //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
+  String msg = "Bienvenido al BOT para la gestion de la temperatura \
+  /get_temp : Obtener temperatura \
+  /get_hum : Obtener humedad";
+
+  bot.sendMessage(user, msg, "");
+  // Start = true;
+}
+
+
+/**
+   @brief funcion para parsear un string y dejar el resultado en un array, parsea el comando y 2 argumentos como maximo
+
+   @param comando string a parsear
+   @param arrays[TAM_ARRAY] array de string que se le pasa por referencia
+*/
+void parseaComando(String comando, String arrays[TAM_ARRAY]) {
+  char delimitador = ' ';
+  int commaIndex = comando.indexOf(delimitador);
+  //  Search for the next comma just after the first
+  int secondCommaIndex = comando.indexOf(delimitador, commaIndex + 1);
+
+  arrays[0] = comando.substring(0, commaIndex);
+  arrays[1] = comando.substring(commaIndex + 1, secondCommaIndex);
+  arrays[2] = comando.substring(secondCommaIndex + 1); //+1 para quitar espacio en blanco
+}
+
+
 /********************************************
    EchoMessages - function to Echo messages
  ********************************************/
 void Bot_EchoMessages(float temp, float hum) {
   for (int i = 1; i < bot.message[0][0].toInt() + 1; i++)      {
-    String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
+    String comando = bot.message[i][5].substring(1, bot.message[i][5].length()); //elimino el caracter \ del comando
+    String parse_comandos[TAM_ARRAY];
+    parseaComando(comando, parse_comandos);
+
     int id_user = (bot.message[i][1]).toInt();
     //bot.sendMessage(bot.message[i][4], comando, "");
-    if (comando == "/get_hum") {
-      bot.sendMessage(bot.message[i][4], "La humedad es: " + String(hum) + "%", "");
-    }
-    else if (comando == "/get_temp") {
-      bot.sendMessage(bot.message[i][4], "La temperatura es: " + String(temp) + "*C", "");
-    }
-    else if (comando == "/set_rele_on") {
-      digitalWrite(RELE_UNO, HIGH);    // turn the LED off (LOW is the voltage level)
-      bot.sendMessage(bot.message[i][4], "Encendido rele 1", "");
-    }
-    else if (comando == "/set_rele_off") {
-      digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
-      bot.sendMessage(bot.message[i][4], "Apagado rele 1", "");
-    }
-    else if (comando == "/start") {
-      bot.sendMessage(bot.message[i][4], "Bienvenido al BOT para la gesti?n de la temperatura", "");
-      bot.sendMessage(bot.message[i][4], "/get_temp : Obtener temperatura", "");
-      bot.sendMessage(bot.message[i][4], "/get_hum : Obtener humedad", "");
-      if (admin_tg == id_user)
+
+    //MODO ADMINISTRADOR
+    if (admin_tg == id_user) {
+      if (parse_comandos[0] == "/get_hum")
+        bot.sendMessage(bot.message[i][4], "La humedad es: " + String(hum) + "%", "");
+
+      else if (parse_comandos[0] == "/get_temp")
+        bot.sendMessage(bot.message[i][4], "La temperatura es: " + String(temp) + "*C", "");
+
+      else if (parse_comandos[0] == "/set_rele")
+        set_rele(parse_comandos[1], bot.message[i][4]);
+
+      else if (parse_comandos[0] == "/start") {
+        show_start(bot.message[i][4]);
         bot.sendMessage(bot.message[i][4], "Entras en modo Administrador", "");
+      }
+
       else
-        bot.sendMessage(bot.message[i][4], "Entras en modo Invitado", "");
-      Start = true;
+        bot.sendMessage(bot.message[i][4], "Comando desconocido", "");
     }
-    else
-      bot.sendMessage(bot.message[i][4], bot.message[i][5], "");
+
+    //MODO INVITADO
+    else {
+      if (parse_comandos[0] == "/start") {
+        show_start(bot.message[i][4]);
+        bot.sendMessage(bot.message[i][4], "Entras en modo Invitado", "");
+      }
+    }
   }
   bot.message[0][0] = "";   // All messages have been replied - reset new messages
 }
@@ -155,15 +203,15 @@ void loop() {
       // Compute heat index in Celsius (isFahreheit = false)
       float hic = dht.computeHeatIndex(t, h, false);
 
-      Serial.print("Humidity: ");
-      Serial.print(h);
-      Serial.print(" %\t");
-      Serial.print("Temperature: ");
-      Serial.print(t);
-      Serial.print(" *C ");
-      Serial.print("Heat index: ");
-      Serial.print(hic);
-      Serial.println(" *C ");
+      /*Serial.print("Humidity: ");
+        Serial.print(h);
+        Serial.print(" %\t");
+        Serial.print("Temperature: ");
+        Serial.print(t);
+        Serial.print(" *C ");
+        Serial.print("Heat index: ");
+        Serial.print(hic);
+        Serial.println(" *C ");*/
     }
     else {
       Serial.println("Failed to read from DHT sensor!");
