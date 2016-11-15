@@ -10,7 +10,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ESP8266TelegramBOT.h>
-#include "DHT.h"  //https://github.com/adafruit/DHT-sensor-library
+//#include "DHT.h"  //https://github.com/adafruit/DHT-sensor-library
 
 #include "credentials.h"
 
@@ -23,10 +23,11 @@
 #define LED_HUMEDAD D5
 #define DHTPIN D2     // what digital pin we're connected to
 
-#define DHTTYPE DHT11   // DHT 11
-DHT dht(DHTPIN, DHTTYPE);    // Initialize DHT sensor.
+//#define DHTTYPE DHT11   // DHT 11
+//DHT dht(DHTPIN, DHTTYPE);    // Initialize DHT sensor.
 
 #define TAM_ARRAY 3
+#define CONVERSION_MILLIS 60000
 
 // Initialize Wifi connection to the router
 const char* ssid = SSID_WIFI;
@@ -41,7 +42,9 @@ int admin_tg = ID_TELEGRAM;         //PONER EN CREDENTIAL.H
 int Bot_mtbs = 2000; //mean time between scan messages
 unsigned long Bot_lasttime;   //last time messages' scan has been done
 //bool Start = false;
-
+unsigned long temporizador;
+unsigned long sumaTemporizador;
+String accion_temporizador;
 
 
 void setup() {
@@ -65,7 +68,7 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  dht.begin();
+  //dht.begin();
   delay(2000); // Wait a few seconds between measurements.
 
   bot.begin();      // launch Bot functionalities
@@ -95,6 +98,22 @@ void show_start(String user) {
 
   bot.sendMessage(user, msg, "");
   // Start = true;
+}
+
+
+void set_temporizador(String accion, int tiempo, String user) {
+  temporizador = tiempo * CONVERSION_MILLIS;
+  accion_temporizador = accion;
+  sumaTemporizador = millis();
+  String msg = "";
+
+  if (accion == "on") {
+    msg = "Programado encendido en " + String(tiempo) + " min";
+  }
+  else if (accion == "off") {
+    msg = "Programado apagado en " + String(tiempo) + " min";
+  }
+  bot.sendMessage(user, msg, "");
 }
 
 
@@ -138,6 +157,9 @@ void Bot_EchoMessages(float temp, float hum) {
 
       else if (parse_comandos[0] == "/set_rele")
         set_rele(parse_comandos[1], bot.message[i][4]);
+
+      else if (parse_comandos[0] == "/set_temporizador")
+        set_temporizador(parse_comandos[1], parse_comandos[2].toInt(), bot.message[i][4]);
 
       else if (parse_comandos[0] == "/start") {
         show_start(bot.message[i][4]);
@@ -188,36 +210,43 @@ void AjustaLedHumedad(float humedad) {
 
 
 void loop() {
+  // Serial.println((temporizador + sumaTemporizador) - millis());
+  if (millis() == temporizador + sumaTemporizador)
+    set_rele(accion_temporizador, String(ID_TELEGRAM));
+
 
   if (millis() > Bot_lasttime + Bot_mtbs)  {
     Bot_lasttime = millis();
 
+
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    float h = dht.readHumidity();
-    // Read temperature as Celsius (the default)
-    float t = dht.readTemperature();
+    /* float h = dht.readHumidity();
+      // Read temperature as Celsius (the default)
+      float t = dht.readTemperature();
 
-    // Check if any reads failed and exit early (to try again).
-    if (!isnan(h) && !isnan(t)) {
-      // Compute heat index in Celsius (isFahreheit = false)
-      float hic = dht.computeHeatIndex(t, h, false);
+      // Check if any reads failed and exit early (to try again).
+      if (!isnan(h) && !isnan(t)) {
+       // Compute heat index in Celsius (isFahreheit = false)
+       float hic = dht.computeHeatIndex(t, h, false);
 
-      /*Serial.print("Humidity: ");
-        Serial.print(h);
-        Serial.print(" %\t");
-        Serial.print("Temperature: ");
-        Serial.print(t);
-        Serial.print(" *C ");
-        Serial.print("Heat index: ");
-        Serial.print(hic);
-        Serial.println(" *C ");*/
-    }
-    else {
-      Serial.println("Failed to read from DHT sensor!");
-      return;
-    }
+       Serial.print("Humidity: ");
+         Serial.print(h);
+         Serial.print(" %\t");
+         Serial.print("Temperature: ");
+         Serial.print(t);
+         Serial.print(" *C ");
+         Serial.print("Heat index: ");
+         Serial.print(hic);
+         Serial.println(" *C ");
+      }
+      else {
+       Serial.println("Failed to read from DHT sensor!");
+       return;
+      }*/
 
+    float h = 0;
+    float t = 0;
     AjustaLedTemperatura(t);
     AjustaLedHumedad(h);
 
