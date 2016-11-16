@@ -10,21 +10,17 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ESP8266TelegramBOT.h>
-//#include "DHT.h"  //https://github.com/adafruit/DHT-sensor-library
 
-#include "credentials.h"
+#include "credentials.h"  //
 
+// Pines de la arduino y temperatura
 #define RELE_UNO D4
 #define LED_NORMAL D6
 #define TEMP_CALOR 25.0
 #define LED_CALOR D7
 #define TEMP_FRIO 17.0
 #define LED_FRIO D8
-#define LED_HUMEDAD D5
-#define DHTPIN D2     // what digital pin we're connected to
 
-//#define DHTTYPE DHT11   // DHT 11
-//DHT dht(DHTPIN, DHTTYPE);    // Initialize DHT sensor.
 
 #define TAM_ARRAY 3
 #define CONVERSION_MILLIS 60000
@@ -39,21 +35,27 @@ const char* password = PASS_WIFI;
 #define BOTusername ALIAS_BOT
 TelegramBOT bot(BOTtoken, BOTname, BOTusername);
 int admin_tg = ID_TELEGRAM;         //PONER EN CREDENTIAL.H
-int Bot_mtbs = 2000; //mean time between scan messages
-unsigned long Bot_lasttime;   //last time messages' scan has been done
-//bool Start = false;
-unsigned long temporizador;
-unsigned long sumaTemporizador;
-String accion_temporizador;
+#define Bot_mtbs 2000 //mean time between scan messages
 
 
-void setup() {
-  pinMode(RELE_UNO, OUTPUT);
-  pinMode(LED_FRIO, OUTPUT);
-  pinMode(LED_CALOR, OUTPUT);
-  pinMode(LED_NORMAL, OUTPUT);
-  pinMode(LED_HUMEDAD, OUTPUT);
+typedef struct {
+  unsigned long Bot_lasttime;   //last time messages' scan has been done
+  bool activo;
+  unsigned long temporizador;  //tiempo * CONVERSION_MILLIS
+  unsigned long sumaTemporizador;  //millis()
+  String accion_temporizador; //on - off
+} temporizadores_globales;
 
+typedef struct {
+  bool set_rele;
+  bool set_temporizador;
+} variables_globales;
+
+variables_globales gobal_tg;
+temporizadores_globales global_temporizador;
+
+
+void conecta_wifi() {
   Serial.begin(115200);
   Serial.println();
   Serial.print("connecting to ");
@@ -67,9 +69,21 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+}
 
-  //dht.begin();
-  delay(2000); // Wait a few seconds between measurements.
+
+void setup() {
+  pinMode(RELE_UNO, OUTPUT);
+  pinMode(LED_FRIO, OUTPUT);
+  pinMode(LED_CALOR, OUTPUT);
+  pinMode(LED_NORMAL, OUTPUT);
+
+  conecta_wifi();
+
+  gobal_tg.set_rele = false;
+  gobal_tg.set_temporizador = false;
+
+  global_temporizador.activo = false;
 
   bot.begin();      // launch Bot functionalities
   bot.sendMessage(String(admin_tg), "Inicio arduino", "");
@@ -92,20 +106,19 @@ void set_rele(String accion, String user) {
 
 void show_start(String user) {
   //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
-  String msg = "Bienvenido al BOT para la gestion de la temperatura \
-  /get_temp : Obtener temperatura \
-  /get_hum : Obtener humedad";
+  String msg = "Bienvenido al BOT de Pablo para la gestion de la temperatura \
+  /get_temp : Obtener temperatura";
 
   bot.sendMessage(user, msg, "");
-  // Start = true;
 }
 
 
 void set_temporizador(String accion, int tiempo, String user) {
-  temporizador = tiempo * CONVERSION_MILLIS;
-  accion_temporizador = accion;
-  sumaTemporizador = millis();
-  String msg = "";
+  global_temporizador.temporizador = tiempo * CONVERSION_MILLIS;
+  global_temporizador.accion_temporizador = accion;
+  global_temporizador.sumaTemporizador = millis();
+  global_temporizador.activo = true;
+  String msg = "Parametro de /set_rele incorrecto";
 
   if (accion == "on") {
     msg = "Programado encendido en " + String(tiempo) + " min";
@@ -116,6 +129,12 @@ void set_temporizador(String accion, int tiempo, String user) {
   bot.sendMessage(user, msg, "");
 }
 
+
+String get_temporizador() {
+  float tiempo = (global_temporizador.temporizador + global_temporizador.sumaTemporizador) - millis();
+  return String(tiempo / CONVERSION_MILLIS);
+
+}
 
 /**
    @brief funcion para parsear un string y dejar el resultado en un array, parsea el comando y 2 argumentos como maximo
@@ -138,7 +157,7 @@ void parseaComando(String comando, String arrays[TAM_ARRAY]) {
 /********************************************
    EchoMessages - function to Echo messages
  ********************************************/
-void Bot_EchoMessages(float temp, float hum) {
+void Bot_EchoMessages(float temp) {
   for (int i = 1; i < bot.message[0][0].toInt() + 1; i++)      {
     String comando = bot.message[i][5].substring(1, bot.message[i][5].length()); //elimino el caracter \ del comando
     String parse_comandos[TAM_ARRAY];
@@ -149,10 +168,7 @@ void Bot_EchoMessages(float temp, float hum) {
 
     //MODO ADMINISTRADOR
     if (admin_tg == id_user) {
-      if (parse_comandos[0] == "/get_hum")
-        bot.sendMessage(bot.message[i][4], "La humedad es: " + String(hum) + "%", "");
-
-      else if (parse_comandos[0] == "/get_temp")
+      if (parse_comandos[0] == "/get_temp")
         bot.sendMessage(bot.message[i][4], "La temperatura es: " + String(temp) + "*C", "");
 
       else if (parse_comandos[0] == "/set_rele")
@@ -164,6 +180,13 @@ void Bot_EchoMessages(float temp, float hum) {
       else if (parse_comandos[0] == "/start") {
         show_start(bot.message[i][4]);
         bot.sendMessage(bot.message[i][4], "Entras en modo Administrador", "");
+      }
+
+      else if (parse_comandos[0] == "/get_temporizador") {
+        if (global_temporizador.activo)
+          bot.sendMessage(bot.message[i][4], "Tiempo de temporizador " + get_temporizador() + " min.", "");
+        else
+          bot.sendMessage(bot.message[i][4], "Temporizador inactivo" , "");
       }
 
       else
@@ -201,56 +224,20 @@ void AjustaLedTemperatura(float temperatura) {
 }
 
 
-void AjustaLedHumedad(float humedad) {
-  if (humedad < 30.0 || humedad > 50)
-    digitalWrite(LED_HUMEDAD, HIGH);
-  else
-    digitalWrite(LED_HUMEDAD, LOW);
-}
-
-
 void loop() {
-  // Serial.println((temporizador + sumaTemporizador) - millis());
-  if (millis() == temporizador + sumaTemporizador)
-    set_rele(accion_temporizador, String(ID_TELEGRAM));
+  if (global_temporizador.activo)
+    if (millis() == global_temporizador.temporizador + global_temporizador.sumaTemporizador) {
+      set_rele(global_temporizador.accion_temporizador, String(ID_TELEGRAM));
+      global_temporizador.activo = false;
+    }
 
+  if (millis() > global_temporizador.Bot_lasttime + Bot_mtbs)  {
+    global_temporizador.Bot_lasttime = millis();
 
-  if (millis() > Bot_lasttime + Bot_mtbs)  {
-    Bot_lasttime = millis();
-
-
-    // Reading temperature or humidity takes about 250 milliseconds!
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    /* float h = dht.readHumidity();
-      // Read temperature as Celsius (the default)
-      float t = dht.readTemperature();
-
-      // Check if any reads failed and exit early (to try again).
-      if (!isnan(h) && !isnan(t)) {
-       // Compute heat index in Celsius (isFahreheit = false)
-       float hic = dht.computeHeatIndex(t, h, false);
-
-       Serial.print("Humidity: ");
-         Serial.print(h);
-         Serial.print(" %\t");
-         Serial.print("Temperature: ");
-         Serial.print(t);
-         Serial.print(" *C ");
-         Serial.print("Heat index: ");
-         Serial.print(hic);
-         Serial.println(" *C ");
-      }
-      else {
-       Serial.println("Failed to read from DHT sensor!");
-       return;
-      }*/
-
-    float h = 0;
     float t = 0;
-    AjustaLedTemperatura(t);
-    AjustaLedHumedad(h);
 
     bot.getUpdates(bot.message[0][1]);   // launch API GetUpdates up to xxx message
-    Bot_EchoMessages(t, h);   // reply to message with Echo
+    Bot_EchoMessages(t);   // reply to message with Echo
   }
 }
+
