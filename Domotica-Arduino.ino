@@ -33,7 +33,7 @@ TelegramBOT bot(BOTtoken, BOTname, BOTusername);
 
 
 typedef struct {
-  unsigned long Bot_lasttime;   //last time messages' scan has been done
+  unsigned long tiempoActual;   //last time messages' scan has been done
   bool activo;
   unsigned long temporizador;  //tiempo * CONVERSION_MILLIS
   unsigned long sumaTemporizador;  //millis()
@@ -52,7 +52,7 @@ temporizadores_globales global_temporizador;
 void conecta_wifi() {
   Serial.begin(115200);
   Serial.println();
-  Serial.print("connecting to ");
+  Serial.print("conectando a ");
   Serial.println(SSID_WIFI);
   WiFi.begin(SSID_WIFI, PASS_WIFI);  //definidas en credentials.h
   while (WiFi.status() != WL_CONNECTED) {
@@ -60,7 +60,7 @@ void conecta_wifi() {
     Serial.print(".");
   }
   Serial.println("");
-  Serial.println("WiFi connected");
+  Serial.println("WiFi conectado");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
@@ -79,11 +79,17 @@ void setup() {
 
   global_temporizador.activo = false;
 
-  bot.begin();      // launch Bot functionalities
+  bot.begin();      // Iniciamos el bot
   bot.sendMessage(ID_TELEGRAM, "Inicio arduino", "");
 }
 
 
+/**
+   @brief funcion para obtener el estado del pin al que esta conectado el rele.
+   digitalRead retorna 1 si esta activa y se convierte a true
+
+   @param user string  con el id del usuario al que le contesta
+*/
 void show_start(String user) {
   //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
   String msg = "Bienvenido al BOT de Pablo para la gestion de la temperatura \
@@ -115,7 +121,10 @@ void set_rele(String accion, String user) {
 
 }
 
-
+/**
+   @brief funcion para obtener el estado del pin al que esta conectado el rele.
+   digitalRead retorna 1 si esta activa y se convierte a true
+*/
 bool get_rele() {
   return bool(digitalRead(RELE_UNO));
 }
@@ -126,7 +135,7 @@ void set_temporizador(String accion, int tiempo, String user) {
   global_temporizador.accion_temporizador = accion;
   global_temporizador.sumaTemporizador = millis();
   global_temporizador.activo = true;
-  String msg = "Parametro de /set_rele incorrecto";
+  String msg = "Parametro de /set_temporizador incorrecto";
 
   if (accion == "on")
     msg = "Programado encendido en " + String(tiempo) + " min";
@@ -136,10 +145,13 @@ void set_temporizador(String accion, int tiempo, String user) {
 }
 
 
+/**
+   @brief funcion para obtener el tiempo restante de temporizador, va de 0 a 99 no de 0 a 59.
+   Esta funcion solo es llamada si global_temporizador.activo esta a true
+*/
 String get_temporizador() {
   float tiempo = (global_temporizador.temporizador + global_temporizador.sumaTemporizador) - millis();
   return String(tiempo / CONVERSION_MILLIS);
-
 }
 
 
@@ -167,13 +179,21 @@ void parseaComando(String comando, String arrays[TAM_ARRAY]) {
 }
 
 
-/********************************************
-   EchoMessages - function to Echo messages
- ********************************************/
+/**
+  start - Inicia la conversacion
+  get_temp - Obtienes la temperatua actual
+  set_rele - Activa/Desactiva el rele
+  get_rele - Obtienes el estado actual del rele
+  set_temporizador - Activas el temporizador para una accion en x tiempo
+  get_temporizador - Obtienes el tiempo restante para que se active el temporizador
+  help - Muestra la ayuda
+*/
 void botTrataMensajes(float temp) {
   for (int i = 1; i < bot.message[0][0].toInt() + 1; i++) {
-    String comando = bot.message[i][5].substring(1, bot.message[i][5].length()); //elimino el caracter \ del comando
-    String parse_comandos[TAM_ARRAY];
+    //elimino el caracter / del comando, /set_rele on => set_rele on
+    String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
+
+    String parse_comandos[TAM_ARRAY]; //array que contrandra comando mas argumentos
     parseaComando(comando, parse_comandos);
 
     //MODO ADMINISTRADOR
@@ -189,7 +209,6 @@ void botTrataMensajes(float temp) {
 
       else if (parse_comandos[0] == "/set_rele")
         set_rele(parse_comandos[1], bot.message[i][4]);
-
       else if (parse_comandos[0] == "/get_rele") {
         String msg;
         if (get_rele())
@@ -201,17 +220,19 @@ void botTrataMensajes(float temp) {
 
       else if (parse_comandos[0] == "/set_temporizador")
         set_temporizador(parse_comandos[1], parse_comandos[2].toInt(), bot.message[i][4]);
-
-      else if (parse_comandos[0] == "/start") {
-        show_start(bot.message[i][4]);
-        bot.sendMessage(bot.message[i][4], "Entras en modo Administrador", "");
-      }
-
       else if (parse_comandos[0] == "/get_temporizador") {
         if (global_temporizador.activo)
           bot.sendMessage(bot.message[i][4], "Tiempo de temporizador " + get_temporizador() + " min.", "");
         else
           bot.sendMessage(bot.message[i][4], "Temporizador inactivo" , "");
+      }
+
+      else if (parse_comandos[0] == "/start") {
+        show_start(bot.message[i][4]);
+        bot.sendMessage(bot.message[i][4], "Entras en modo Administrador", "");
+      }
+      else if (parse_comandos[0] == "/help") {
+        bot.sendMessage(bot.message[i][4], "No hay ayuda", "");
       }
 
       else
@@ -224,6 +245,9 @@ void botTrataMensajes(float temp) {
         show_start(bot.message[i][4]);
         bot.sendMessage(bot.message[i][4], "Entras en modo Invitado", "");
       }
+      else
+        //me llega una copia de los mensajes de desconocidos con su id + nombre
+        bot.sendMessage(String(ID_TELEGRAM), "User: " + bot.message[i][1] + " @" +  bot.message[i][0] + " dice: " + bot.message[i][5], "");
     }
   }
   bot.message[0][0] = "";   // All messages have been replied - reset new messages
@@ -256,13 +280,13 @@ void loop() {
       global_temporizador.activo = false;
     }
 
-  if (millis() > global_temporizador.Bot_lasttime + tiempo_espera)  {
-    global_temporizador.Bot_lasttime = millis();
+  if (millis() > global_temporizador.tiempoActual + tiempo_espera)  {
+    global_temporizador.tiempoActual = millis();
 
-    float t = 0;
+    float t = 22;
 
-    bot.getUpdates(bot.message[0][1]);   // launch API GetUpdates up to xxx message
-    botTrataMensajes(t);   // reply to message with Echo
+    bot.getUpdates(bot.message[0][1]);
+    botTrataMensajes(t);
   }
 }
 
