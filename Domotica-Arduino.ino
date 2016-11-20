@@ -6,7 +6,7 @@
    @date 13/11/2016
 */
 
-
+#include <math.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ESP8266TelegramBOT.h>
@@ -20,6 +20,7 @@
 #define LED_CALOR D7
 #define TEMP_FRIO 17.0
 #define LED_FRIO D8
+#define ANALOG_TEMP A0
 
 #define TAM_ARRAY 3  // array de string que se le pasa por referencia
 #define CONVERSION_MILLIS 60000  // para conversion minutos a milisegundos
@@ -84,6 +85,17 @@ void setup() {
 }
 
 
+// IMPORTANTE TIENE QUE ESTAR CONECTADO AL 3.3V EN Wemos D1 R2
+double calculaTemperatura(int RawADC) {
+  double Temp;
+  Temp = log(10000.0 * ((1024.0 / RawADC - 1)));
+  Temp = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * Temp * Temp )) * Temp );
+  Temp = Temp - 273.15;            // Convert Kelvin to Celcius
+  //Temp = (Temp * 9.0)/ 5.0 + 32.0; // Convert Celcius to Fahrenheit
+  return Temp;
+}
+
+
 /**
    @brief funcion para obtener el estado del pin al que esta conectado el rele.
    digitalRead retorna 1 si esta activa y se convierte a true
@@ -94,8 +106,8 @@ void show_start(String user) {
   //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
   String msg = "Bienvenido al BOT de Pablo para la gestion de la temperatura \
   /get_temp : Obtener temperatura";
-
-  bot.sendMessage(user, msg, "");
+  String keyboardJson = "[[\"/ledon\", \"/ledoff\"],[\"/status\"]]";
+  bot.sendMessage(user, msg, keyboardJson);
 }
 
 
@@ -283,10 +295,11 @@ void loop() {
   if (millis() > global_temporizador.tiempoActual + tiempo_espera)  {
     global_temporizador.tiempoActual = millis();
 
-    float t = 22;
+    int readTemp = analogRead(ANALOG_TEMP);
+    double temp =  calculaTemperatura(readTemp);
 
     bot.getUpdates(bot.message[0][1]);
-    botTrataMensajes(t);
+    botTrataMensajes(temp);
   }
 }
 
