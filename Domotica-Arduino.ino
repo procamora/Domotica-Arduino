@@ -6,6 +6,16 @@
    @date 13/11/2016
 */
 
+/** Lista de comandos para mandar a botfather
+  start - Inicia la conversacion
+  get_temp - Obtienes la temperatua actual
+  set_rele - Activa/Desactiva el rele
+  get_rele - Obtienes el estado actual del rele
+  set_temporizador - Activas el temporizador para una accion en x tiempo
+  get_temporizador - Obtienes el tiempo restante para que se active el temporizador
+  help - Muestra la ayuda
+*/
+
 #include <math.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
@@ -26,11 +36,9 @@
 #define CONVERSION_MILLIS 60000  // para conversion minutos a milisegundos
 #define tiempo_espera 2000 //mean time between scan messages
 
-// Inicializamos Telegram BOT
 #define BOTtoken API_BOT  // token bot
-//#define BOTname NAME_BOT  // nombre visible del bot
-//#define BOTusername ALIAS_BOT  //alias, acaba en ...._bot
-//TelegramBOT bot(BOTtoken, BOTname, BOTusername);
+
+// Inicializamos Telegram BOT
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOTtoken, client);
 
@@ -81,7 +89,6 @@ void setup() {
 
   global_temporizador.activo = false;
 
-  //bot.begin();      // Iniciamos el bot
   bot.sendMessage(ID_TELEGRAM, "Inicio arduino", "");
 }
 
@@ -97,14 +104,22 @@ double calculaTemperatura(int RawADC) {
 }
 
 
-/**
-   @brief funcion para obtener el estado del pin al que esta conectado el rele.
-   digitalRead retorna 1 si esta activa y se convierte a true
+void genera_teclado(String chat_id, String msg) {
+  String fila1 = "[\"/start\", \"/help\"],";
+  String fila2 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
+  String fila3 = "[\"/set_temporizador\", \"/get_temporizador\"],";
+  String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
+  bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, false, true, false);
+}
 
-   @param user string  con el id del usuario al que le contesta
+
+/**
+   @brief funcion para mandar un mensaje con todos los comandos disponibles
+   Importante: el formateo tiene que ser HTML para que funcione el _, en markdown no funciona
+
+   @param chat_id String id del usuario al que manda un mensaje
 */
 void show_start(String chat_id) {
-  //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
   String welcome = "Bienvenido al BOT de Pablo para la gestion de temperatura\n";
   welcome += "/start : Inicia la conversacion \n";
   welcome += "/get_temp : Obtienes la temperatua actual \n";
@@ -113,9 +128,8 @@ void show_start(String chat_id) {
   welcome += "/get_temporizador : Obtienes el tiempo restante para que se active el temporizador \n";
   welcome += "/set_temporizador : Activas el temporizador para una accion en x tiempo \n";
   welcome += "/help : Muestra la ayuda \n";
-  String keyboardJson = "[[\"/start\", \"/get_temp\"],[\"/get_rele\"]]";
-  bot.sendMessageWithReplyKeyboard(chat_id, welcome, "HTML", keyboardJson, true);
 
+  genera_teclado(chat_id, welcome);
 }
 
 
@@ -144,7 +158,7 @@ void set_rele(String accion, String chat_id) {
     welcome += "/off : Apagar el rele \n";
     welcome += "/exit : Cancelar la accion de cambio del rele \n";
     String keyboardJson = "[[\"/on\", \"/off\"],[\"/exit\"]]";
-    bot.sendMessageWithReplyKeyboard(chat_id, welcome, "Markdown", keyboardJson, true, true);
+    bot.sendMessageWithReplyKeyboard(chat_id, welcome, "HTML", keyboardJson, true, true);
   }
   else
     bot.sendMessage(chat_id, msg, "");
@@ -153,6 +167,7 @@ void set_rele(String accion, String chat_id) {
 
 /**
    @brief funcion para obtener el estado del pin al que esta conectado el rele.
+
    digitalRead retorna 1 si esta activa y se convierte a true
 */
 bool get_rele() {
@@ -160,7 +175,14 @@ bool get_rele() {
 }
 
 
-void set_temporizador(String accion, int tiempo, String user) {
+/**
+   @brief funcion para activar un temporizador con una accion para el rele
+
+   @param accion String opcion para el rele: on - off
+   @param tiempo int tiempo en minutos antes de que sale el temporizador
+   @param chat_id String id del usuario al que manda un mensaje
+*/
+void set_temporizador(String accion, int tiempo, String chat_id) {
   global_temporizador.temporizador = tiempo * CONVERSION_MILLIS;
   global_temporizador.accion_temporizador = accion;
   global_temporizador.sumaTemporizador = millis();
@@ -171,13 +193,15 @@ void set_temporizador(String accion, int tiempo, String user) {
     msg = "Programado encendido en " + String(tiempo) + " min";
   else if (accion == "off")
     msg = "Programado apagado en " + String(tiempo) + " min";
-  bot.sendMessage(user, msg, "");
+  bot.sendMessage(chat_id, msg, "");
 }
 
 
 /**
    @brief funcion para obtener el tiempo restante de temporizador, va de 0 a 99 no de 0 a 59.
    Esta funcion solo es llamada si global_temporizador.activo esta a true
+
+   @return String con el tiempo que falta para que salte el temporizador
 */
 String get_temporizador() {
   float tiempo = (global_temporizador.temporizador + global_temporizador.sumaTemporizador) - millis();
@@ -188,7 +212,7 @@ String get_temporizador() {
 /**
    @brief funcion para parsear un string y dejar el resultado en un array, parsea el comando y 2 argumentos como maximo
 
-   @param comando string a parsear
+   @param comando String a parsear
    @param arrays[TAM_ARRAY] array de string que se le pasa por referencia
 */
 void parseaComando(String comando, String arrays[TAM_ARRAY]) {
@@ -209,15 +233,7 @@ void parseaComando(String comando, String arrays[TAM_ARRAY]) {
 }
 
 
-/**
-  start - Inicia la conversacion
-  get_temp - Obtienes la temperatua actual
-  set_rele - Activa/Desactiva el rele
-  get_rele - Obtienes el estado actual del rele
-  set_temporizador - Activas el temporizador para una accion en x tiempo
-  get_temporizador - Obtienes el tiempo restante para que se active el temporizador
-  help - Muestra la ayuda
-*/
+
 void botTrataMensajes(int numNewMessages, float temp) {
   for (int i = 0; i < numNewMessages; i++) {
 
@@ -237,6 +253,7 @@ void botTrataMensajes(int numNewMessages, float temp) {
     Serial.println(parse_comandos[2]);
     //MODO ADMINISTRADOR
     if (String(ID_TELEGRAM) == chat_id) {
+      bot.sendMessage(String(ID_TELEGRAM), "User: " + chat_id + " @" + bot.messages[i].from_id + " dice: " + text, "");
       if (gobal_tg.set_rele) {
         gobal_tg.set_rele = false;
         //elimino el primer caracter que sera un '/'
@@ -271,7 +288,7 @@ void botTrataMensajes(int numNewMessages, float temp) {
         show_start(chat_id);
       }
       else if (parse_comandos[0] == "/help") {
-        bot.sendMessage(chat_id, "No hay ayuda", "");
+        show_start(chat_id);
       }
 
       else
@@ -333,4 +350,3 @@ void loop() {
     }
   }
 }
-
