@@ -9,7 +9,7 @@
 #include <math.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
-#include <ESP8266TelegramBOT.h>
+#include <UniversalTelegramBot.h>
 
 #include "credentials.h"  // todos los valores son String
 
@@ -28,10 +28,11 @@
 
 // Inicializamos Telegram BOT
 #define BOTtoken API_BOT  // token bot
-#define BOTname NAME_BOT  // nombre visible del bot
-#define BOTusername ALIAS_BOT  //alias, acaba en ...._bot
-TelegramBOT bot(BOTtoken, BOTname, BOTusername);
-
+//#define BOTname NAME_BOT  // nombre visible del bot
+//#define BOTusername ALIAS_BOT  //alias, acaba en ...._bot
+//TelegramBOT bot(BOTtoken, BOTname, BOTusername);
+WiFiClientSecure client;
+UniversalTelegramBot bot(BOTtoken, client);
 
 typedef struct {
   unsigned long tiempoActual;   //last time messages' scan has been done
@@ -80,7 +81,7 @@ void setup() {
 
   global_temporizador.activo = false;
 
-  bot.begin();      // Iniciamos el bot
+  //bot.begin();      // Iniciamos el bot
   bot.sendMessage(ID_TELEGRAM, "Inicio arduino", "");
 }
 
@@ -102,16 +103,23 @@ double calculaTemperatura(int RawADC) {
 
    @param user string  con el id del usuario al que le contesta
 */
-void show_start(String user) {
+void show_start(String chat_id) {
   //HACER ESTO EN UN SOLO ENVIO DE TELEGRAM
-  String msg = "Bienvenido al BOT de Pablo para la gestion de la temperatura \
-  /get_temp : Obtener temperatura";
-  String keyboardJson = "[[\"/ledon\", \"/ledoff\"],[\"/status\"]]";
-  bot.sendMessage(user, msg, keyboardJson);
+  String welcome = "Bienvenido al BOT de Pablo para la gestion de temperatura\n";
+  welcome += "/start : Inicia la conversacion \n";
+  welcome += "/get_temp : Obtienes la temperatua actual \n";
+  welcome += "/get_rele : Obtienes el estado actual del rele \n";
+  welcome += "/set_rele : Activa / Desactiva el rele \n";
+  welcome += "/get_temporizador : Obtienes el tiempo restante para que se active el temporizador \n";
+  welcome += "/set_temporizador : Activas el temporizador para una accion en x tiempo \n";
+  welcome += "/help : Muestra la ayuda \n";
+  String keyboardJson = "[[\"/start\", \"/get_temp\"],[\"/get_rele\"]]";
+  bot.sendMessageWithReplyKeyboard(chat_id, welcome, "HTML", keyboardJson, true);
+
 }
 
 
-void set_rele(String accion, String user) {
+void set_rele(String accion, String chat_id) {
   Serial.println(accion);
   Serial.println(accion.length());
   String msg = "parametro de /set_rele incorecto";
@@ -123,13 +131,23 @@ void set_rele(String accion, String user) {
     digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
     msg = "Apagado rele 1";
   }
+
+  else if (accion == "exit") {
+    gobal_tg.set_rele = false;
+    msg = "Cancelada accion de rele";
+  }
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
   if (accion.length() == 0) {
     gobal_tg.set_rele = true;
-    bot.sendMessage(user, "Que acción que deseas hacer con el rele? /on /off", "");
+    String welcome = "Que acción que deseas hacer con el rele?\n";
+    welcome += "/on : Encender el rele \n";
+    welcome += "/off : Apagar el rele \n";
+    welcome += "/exit : Cancelar la accion de cambio del rele \n";
+    String keyboardJson = "[[\"/on\", \"/off\"],[\"/exit\"]]";
+    bot.sendMessageWithReplyKeyboard(chat_id, welcome, "Markdown", keyboardJson, true, true);
   }
   else
-    bot.sendMessage(user, msg, "");
+    bot.sendMessage(chat_id, msg, "");
 
 }
 
@@ -200,69 +218,78 @@ void parseaComando(String comando, String arrays[TAM_ARRAY]) {
   get_temporizador - Obtienes el tiempo restante para que se active el temporizador
   help - Muestra la ayuda
 */
-void botTrataMensajes(float temp) {
-  for (int i = 1; i < bot.message[0][0].toInt() + 1; i++) {
+void botTrataMensajes(int numNewMessages, float temp) {
+  for (int i = 0; i < numNewMessages; i++) {
+
+    String chat_id = String(bot.messages[i].chat_id);
+    String text = bot.messages[i].text;
+    Serial.println(chat_id);
+    Serial.println(text);
+
     //elimino el caracter / del comando, /set_rele on => set_rele on
-    String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
+    //String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
 
     String parse_comandos[TAM_ARRAY]; //array que contrandra comando mas argumentos
-    parseaComando(comando, parse_comandos);
+    parseaComando(text, parse_comandos);
 
+    Serial.println(parse_comandos[0]);
+    Serial.println(parse_comandos[1]);
+    Serial.println(parse_comandos[2]);
     //MODO ADMINISTRADOR
-    if (String(ID_TELEGRAM) == String(bot.message[i][1])) {
+    if (String(ID_TELEGRAM) == chat_id) {
       if (gobal_tg.set_rele) {
         gobal_tg.set_rele = false;
         //elimino el primer caracter que sera un '/'
-        set_rele(parse_comandos[0].substring(1, parse_comandos[0].length()), bot.message[i][4]);
+        set_rele(parse_comandos[0].substring(1, parse_comandos[0].length()), chat_id);
       }
 
       else if (parse_comandos[0] == "/get_temp")
-        bot.sendMessage(bot.message[i][4], "La temperatura es: " + String(temp) + "*C", "");
+        bot.sendMessage(chat_id, "La temperatura es: " + String(temp) + "*C", "");
 
       else if (parse_comandos[0] == "/set_rele")
-        set_rele(parse_comandos[1], bot.message[i][4]);
+        set_rele(parse_comandos[1], chat_id);
       else if (parse_comandos[0] == "/get_rele") {
         String msg;
         if (get_rele())
           msg = "Encendido";
         else
           msg = "Apagado";
-        bot.sendMessage(bot.message[i][4], "Estado del rele: " + msg, "");
+        bot.sendMessage(chat_id, "Estado del rele: " + msg, "");
       }
 
       else if (parse_comandos[0] == "/set_temporizador")
-        set_temporizador(parse_comandos[1], parse_comandos[2].toInt(), bot.message[i][4]);
+        set_temporizador(parse_comandos[1], parse_comandos[2].toInt(), chat_id);
       else if (parse_comandos[0] == "/get_temporizador") {
         if (global_temporizador.activo)
-          bot.sendMessage(bot.message[i][4], "Tiempo de temporizador " + get_temporizador() + " min.", "");
+          bot.sendMessage(chat_id, "Tiempo de temporizador " + get_temporizador() + " min.", "");
         else
-          bot.sendMessage(bot.message[i][4], "Temporizador inactivo" , "");
+          bot.sendMessage(chat_id, "Temporizador inactivo" , "");
       }
 
       else if (parse_comandos[0] == "/start") {
-        show_start(bot.message[i][4]);
-        bot.sendMessage(bot.message[i][4], "Entras en modo Administrador", "");
+        bot.sendMessage(chat_id, "Entras en modo Administrador", "");
+        show_start(chat_id);
       }
       else if (parse_comandos[0] == "/help") {
-        bot.sendMessage(bot.message[i][4], "No hay ayuda", "");
+        bot.sendMessage(chat_id, "No hay ayuda", "");
       }
 
       else
-        bot.sendMessage(bot.message[i][4], "Comando desconocido :(", "");
+        bot.sendMessage(chat_id, "Comando desconocido :(", "");
     }
 
     //MODO INVITADO
     else {
       if (parse_comandos[0] == "/start") {
-        show_start(bot.message[i][4]);
-        bot.sendMessage(bot.message[i][4], "Entras en modo Invitado", "");
+        bot.sendMessage(chat_id, "Entras en modo Invitado", "");
+        show_start(chat_id);
       }
       else
         //me llega una copia de los mensajes de desconocidos con su id + nombre
-        bot.sendMessage(String(ID_TELEGRAM), "User: " + bot.message[i][1] + " @" +  bot.message[i][0] + " dice: " + bot.message[i][5], "");
+        ;
+      //bot.sendMessage(String(ID_TELEGRAM), "User: " + chat_id + " @" +  bot.message[i][0] + " dice: " + bot.message[i][5], "");
     }
   }
-  bot.message[0][0] = "";   // All messages have been replied - reset new messages
 }
 
 
@@ -298,8 +325,12 @@ void loop() {
     int readTemp = analogRead(ANALOG_TEMP);
     double temp =  calculaTemperatura(readTemp);
 
-    bot.getUpdates(bot.message[0][1]);
-    botTrataMensajes(temp);
+    int numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
+    while (numNewMessages) {
+      Serial.println("got response");
+      botTrataMensajes(numNewMessages, temp);
+      numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
+    }
   }
 }
 
