@@ -19,7 +19,8 @@
 #include <math.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
-#include <UniversalTelegramBot.h>
+#include "UniversalTelegramBot.h"  //https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+#include <stdarg.h>
 
 #include "credentials.h"  // todos los valores son String
 
@@ -34,7 +35,7 @@
 
 #define TAM_ARRAY 3  // array de string que se le pasa por referencia
 #define CONVERSION_MILLIS 60000  // para conversion minutos a milisegundos
-#define tiempo_espera 2000 //mean time between scan messages
+#define tiempo_espera 1500 //mean time between scan messages
 
 #define BOTtoken API_BOT  // token bot
 
@@ -109,7 +110,7 @@ void genera_teclado(String chat_id, String msg) {
   String fila2 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
   String fila3 = "[\"/set_temporizador\", \"/get_temporizador\"],";
   String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
-  bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, false, true, false);
+  //bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, false, true, false);
 }
 
 
@@ -157,8 +158,10 @@ void set_rele(String accion, String chat_id) {
     welcome += "/on : Encender el rele \n";
     welcome += "/off : Apagar el rele \n";
     welcome += "/exit : Cancelar la accion de cambio del rele \n";
-    String keyboardJson = "[[\"/on\", \"/off\"],[\"/exit\"]]";
-    bot.sendMessageWithReplyKeyboard(chat_id, welcome, "HTML", keyboardJson, true, true);
+    //String keyboardJson = "[[\"/on\", \"off\"]]";
+    String keyboardJson = "[[{\"text\":\"/on\", \"callback_data\":\"/on\"},{\"text\":\"off\", \"callback_data\":\"/off\"}]]";
+    //    String keyboardJson = "[[{\"text\":\"/on\", \"callback_data\":{\"id\":\"33063767\",\"from\":\"33063767\",\"message\":\"asd\"}},{\"text\":\"off\", \"callback_data\":{\"id\":\"33063767\",\"from\":\"33063767\",\"message\":\"asd\"}}]]";
+    bot.sendMessageWithInlineKeyboardMarkup(chat_id, welcome, "HTML", keyboardJson, true, true);
   }
   else
     bot.sendMessage(chat_id, msg, "");
@@ -239,8 +242,8 @@ void botTrataMensajes(int numNewMessages, float temp) {
 
     String chat_id = String(bot.messages[i].chat_id);
     String text = bot.messages[i].text;
-    Serial.println(chat_id);
-    Serial.println(text);
+    /*Serial.println(chat_id);
+      Serial.println(text);*/
 
     //elimino el caracter / del comando, /set_rele on => set_rele on
     //String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
@@ -248,12 +251,11 @@ void botTrataMensajes(int numNewMessages, float temp) {
     String parse_comandos[TAM_ARRAY]; //array que contrandra comando mas argumentos
     parseaComando(text, parse_comandos);
 
-    Serial.println(parse_comandos[0]);
-    Serial.println(parse_comandos[1]);
-    Serial.println(parse_comandos[2]);
+    /*Serial.println(parse_comandos[0]);
+      Serial.println(parse_comandos[1]);
+      Serial.println(parse_comandos[2]);*/
     //MODO ADMINISTRADOR
     if (String(ID_TELEGRAM) == chat_id) {
-      bot.sendMessage(String(ID_TELEGRAM), "User: " + chat_id + " @" + bot.messages[i].from_id + " dice: " + text, "");
       if (gobal_tg.set_rele) {
         gobal_tg.set_rele = false;
         //elimino el primer caracter que sera un '/'
@@ -302,9 +304,7 @@ void botTrataMensajes(int numNewMessages, float temp) {
         show_start(chat_id);
       }
       else
-        //me llega una copia de los mensajes de desconocidos con su id + nombre
-        ;
-      //bot.sendMessage(String(ID_TELEGRAM), "User: " + chat_id + " @" +  bot.message[i][0] + " dice: " + bot.message[i][5], "");
+        bot.sendMessage(String(ID_TELEGRAM), "User: " + chat_id + " @" + bot.messages[i].username + " dice: " + text, "");
     }
   }
 }
@@ -332,6 +332,7 @@ void ajustaLedTemperatura(float temperatura) {
 void loop() {
   if (global_temporizador.activo)
     if (millis() == global_temporizador.temporizador + global_temporizador.sumaTemporizador) {
+      Serial.println("entrado temporizador");
       set_rele(global_temporizador.accion_temporizador, String(ID_TELEGRAM));
       global_temporizador.activo = false;
     }
