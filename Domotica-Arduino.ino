@@ -90,7 +90,7 @@ void setup() {
 
   global_temporizador.activo = false;
 
-  bot.sendMessage(ID_TELEGRAM, "Inicio arduino", "");
+  genera_teclado(ID_TELEGRAM, "Inicio arduino");
 }
 
 
@@ -108,9 +108,9 @@ double calculaTemperatura(int RawADC) {
 void genera_teclado(String chat_id, String msg) {
   String fila1 = "[\"/start\", \"/help\"],";
   String fila2 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
-  String fila3 = "[\"/set_temporizador\", \"/get_temporizador\"],";
+  String fila3 = "[\"/set_temporizador\", \"/get_temporizador\"]";
   String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
-  //bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, false, true, false);
+  bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, true, true, false);
 }
 
 
@@ -135,8 +135,8 @@ void show_start(String chat_id) {
 
 
 void set_rele(String accion, String chat_id) {
-  Serial.println(accion);
-  Serial.println(accion.length());
+  /*Serial.println(accion);
+    Serial.println(accion.length());*/
   String msg = "parametro de /set_rele incorecto";
   if (accion == "on") {
     digitalWrite(RELE_UNO, HIGH);    // turn the LED off (LOW is the voltage level)
@@ -158,13 +158,12 @@ void set_rele(String accion, String chat_id) {
     welcome += "/on : Encender el rele \n";
     welcome += "/off : Apagar el rele \n";
     welcome += "/exit : Cancelar la accion de cambio del rele \n";
-    //String keyboardJson = "[[\"/on\", \"off\"]]";
-    String keyboardJson = "[[{\"text\":\"/on\", \"callback_data\":\"/on\"},{\"text\":\"off\", \"callback_data\":\"/off\"}]]";
-    //    String keyboardJson = "[[{\"text\":\"/on\", \"callback_data\":{\"id\":\"33063767\",\"from\":\"33063767\",\"message\":\"asd\"}},{\"text\":\"off\", \"callback_data\":{\"id\":\"33063767\",\"from\":\"33063767\",\"message\":\"asd\"}}]]";
-    bot.sendMessageWithInlineKeyboardMarkup(chat_id, welcome, "HTML", keyboardJson, true, true);
+    String keyboardJson = "[[\"/on\", \"/off\"], [\"/exit\"]]";
+    //String keyboardJson = "[[{\"text\":\"/on\", \"callback_data\":\"/on\"},{\"text\":\"off\", \"callback_data\":\"/off\"}]]";
+    bot.sendMessageWithReplyKeyboard(chat_id, welcome, "HTML", keyboardJson, true, true);
   }
   else
-    bot.sendMessage(chat_id, msg, "");
+    genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
 
 }
 
