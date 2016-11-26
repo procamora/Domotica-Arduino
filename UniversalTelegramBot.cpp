@@ -299,7 +299,7 @@ bool UniversalTelegramBot::sendMessageWithInlineKeyboardMarkup(String chat_id, S
   replyMarkup["inline_keyboard"] = keyboardBuffer.parseArray(keyboard);
 
   Serial.println("SEND Post Message ");
-  
+
   return sendPostMessage(payload);
 }
 
