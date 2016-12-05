@@ -97,9 +97,10 @@ double calculaTemperatura(int RawADC) {
 
 
 void genera_teclado(String chat_id, String msg) {
-  String fila1 = "[\"/start\", \"/help\"],";
-  String fila2 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
-  String fila3 = "[\"/set_timer\", \"/get_timer\"]";
+  String fila1 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
+  String fila2 = "[\"/set_timer\", \"/get_timer\"]";
+  String fila3 = "[\"/start\", \"/help\"],";
+
   String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
   bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, true, true, false);
 }
