@@ -21,8 +21,11 @@
 #include <WiFiClientSecure.h>
 #include "UniversalTelegramBot.h"  //https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
 #include <stdarg.h>
+#include <Time.h> //http://www.leantec.es/blog/42_Como-medir-el-tiempo-con-Arduino-y-la-librer%C3%AD.html
 
 #include "credentials.h"  // todos los valores son String
+
+#define MODO_DEBUG false
 
 // Pines de la arduino y temperatura
 #define RELE_UNO D4
@@ -39,6 +42,8 @@
 
 #define BOTtoken API_BOT  // token bot
 
+#define TIEMPO 0, 0, 0, 1, 1, 1970  //siempre que iniciamos el contador empezados desde la misma fecha
+
 // Inicializamos Telegram BOT
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOTtoken, client);
@@ -46,8 +51,8 @@ UniversalTelegramBot bot(BOTtoken, client);
 typedef struct {
   unsigned long tiempoActual;   //last time messages' scan has been done
   bool activo;
-  unsigned long timer;  //tiempo * CONVERSION_MILLIS
-  unsigned long sumaTimer;  //millis()
+  unsigned long timer;  //tiempo
+  time_t horaInicial; //variable que lleva la hora
   String accion_timer; //on - off
 } timers_globales;
 
@@ -98,8 +103,8 @@ double calculaTemperatura(int RawADC) {
 
 void genera_teclado(String chat_id, String msg) {
   String fila1 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
-  String fila2 = "[\"/set_timer\", \"/get_timer\"]";
-  String fila3 = "[\"/start\", \"/help\"],";
+  String fila2 = "[\"/set_timer\", \"/get_timer\"],";
+  String fila3 = "[\"/start\", \"/help\"]";
 
   String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
   bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, true, true, false);
@@ -133,17 +138,11 @@ void show_start(String chat_id) {
    @param chat_id String id del usuario al que manda un mensaje
 */
 void set_rele(String accion, String chat_id) {
-  /*Serial.println(accion);
-    Serial.println(accion.length());*/
-  String msg = "parametro de /set_rele incorecto\nUso: /set_rele on";
-  if (accion == "on") {
-    digitalWrite(RELE_UNO, HIGH);    // turn the LED off (LOW is the voltage level)
-    msg = "Encendido rele 1";
+  if (MODO_DEBUG) {
+    Serial.println(accion);
+    Serial.println(accion.length());
   }
-  else if (accion == "off") {
-    digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
-    msg = "Apagado rele 1";
-  }
+
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
   if (accion.length() == 0) {
     String msg = "Que acción que deseas hacer con el rele?\n";
@@ -155,8 +154,19 @@ void set_rele(String accion, String chat_id) {
     //{\"text\":\"off\", \"callback_data\":\"/off\"}]]";
     bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, true, true);
   }
-  else
+  else {
+    String msg = "parametro de /set_rele incorecto\nUso: /set_rele on";
+    if (accion == "on") {
+      digitalWrite(RELE_UNO, HIGH);    // turn the LED off (LOW is the voltage level)
+      msg = "Encendido rele 1";
+    }
+    else if (accion == "off") {
+      digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
+      msg = "Apagado rele 1";
+
+    }
     genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
+  }
 }
 
 
@@ -179,16 +189,12 @@ bool get_rele() {
    @param chat_id String id del usuario al que manda un mensaje
 */
 void set_timer(String accion, int tiempo, String chat_id) {
-  global_timer.timer = tiempo * CONVERSION_MILLIS;
+  global_timer.timer = tiempo;
   global_timer.accion_timer = accion;
-  global_timer.sumaTimer = millis();
   global_timer.activo = true;
+  setTime(TIEMPO);  //inicializo el tiempo
+  global_timer.horaInicial = now(); //empiezo a contar el tiempo
   String msg = "Parametro de /set_timer incorrecto\nUso:/set_timer off 20";
-
-  if (accion == "on")
-    msg = "Programado encendido en " + String(tiempo) + " min";
-  else if (accion == "off")
-    msg = "Programado apagado en " + String(tiempo) + " min";
 
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
   if (accion.length() == 0) {
@@ -201,8 +207,13 @@ void set_timer(String accion, int tiempo, String chat_id) {
 
     bot.sendMessageWithReplyKeyboard(chat_id, msg, "HTML", keyboardJson, true, true);
   }
-  else
+  else {
+    if (accion == "on")
+      msg = "Programado encendido en " + String(tiempo) + " min";
+    else if (accion == "off")
+      msg = "Programado apagado en " + String(tiempo) + " min";
     genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
+  }
 }
 
 
@@ -213,8 +224,11 @@ void set_timer(String accion, int tiempo, String chat_id) {
    @return String con el tiempo que falta para que salte el timer
 */
 String get_timer() {
-  float tiempo = (global_timer.timer + global_timer.sumaTimer) - millis();
-  return String(tiempo / CONVERSION_MILLIS);
+  time_t temporalhoraFinal = now();
+  int tiempoFin = minute(global_timer.horaInicial) + global_timer.timer; //tiempo fin
+  int restasteMin = (tiempoFin - minute(temporalhoraFinal)) - 1; //-1 porque muestro tambien los segundos
+  int restanteSeg =  60 - second(temporalhoraFinal); //resto 60 porque siempre cuento desde 00
+  return String(restasteMin) + "min " + String(restanteSeg) + "seg";
 }
 
 
@@ -249,8 +263,10 @@ void botTrataMensajes(int numNewMessages, float temp) {
 
     String chat_id = String(bot.messages[i].chat_id);
     String text = bot.messages[i].text;
-    /*Serial.println(chat_id);
-      Serial.println(text);*/
+    if (MODO_DEBUG) {
+      Serial.println(chat_id);
+      Serial.println(text);
+    }
 
     //elimino el caracter / del comando, /set_rele on => set_rele on
     //String comando = bot.message[i][5].substring(1, bot.message[i][5].length());
@@ -258,9 +274,11 @@ void botTrataMensajes(int numNewMessages, float temp) {
     String parse_comandos[TAM_ARRAY]; //array que contrandra comando mas argumentos
     parseaComando(text, parse_comandos);
 
-    /*Serial.println(parse_comandos[0]);
+    if (MODO_DEBUG) {
+      Serial.println(parse_comandos[0]);
       Serial.println(parse_comandos[1]);
-      Serial.println(parse_comandos[2]);*/
+      Serial.println(parse_comandos[2]);
+    }
     //MODO ADMINISTRADOR
     if (String(ID_TELEGRAM) == chat_id) {
       if (parse_comandos[0] == "/exit")
@@ -286,7 +304,7 @@ void botTrataMensajes(int numNewMessages, float temp) {
 
       else if (parse_comandos[0] == "/get_timer") {
         if (global_timer.activo)
-          bot.sendMessage(chat_id, "Tiempo de temporizador " + get_timer() + " min.", "");
+          bot.sendMessage(chat_id, "Tiempo de temporizador " + get_timer(), "");
         else
           bot.sendMessage(chat_id, "Temporizador inactivo" , "");
       }
@@ -337,15 +355,20 @@ void ajustaLedTemperatura(float temperatura) {
 
 
 void loop() {
-  if (global_timer.activo)
-    if (millis() == global_timer.timer + global_timer.sumaTimer) {
-      Serial.println("entrado temporizador");
-      set_rele(global_timer.accion_timer, String(ID_TELEGRAM));
-      global_timer.activo = false;
-    }
-
   if (millis() > global_timer.tiempoActual + tiempo_espera)  {
     global_timer.tiempoActual = millis();
+
+    //global_timer.timer != 0 => para que si lo ejecuto sin argumentos no entre en la funcion y se active
+    if (global_timer.activo && global_timer.timer != 0) {
+      if (MODO_DEBUG == false)
+        Serial.println(get_timer()[0]);
+
+      if (get_timer()[0] == '-') {  //si el numero es negativo salta, como mucho se deberia tratarsar 1.5seg
+        Serial.println("entrado temporizador");
+        set_rele(global_timer.accion_timer, String(ID_TELEGRAM));  //ejecuto accion en rele
+        global_timer.activo = false;
+      }
+    }
 
     int readTemp = analogRead(ANALOG_TEMP);
     double temp =  calculaTemperatura(readTemp);
