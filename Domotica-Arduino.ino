@@ -3,7 +3,7 @@
    @brief Gestion de un rele a traves de telegram
 
    @author Pablo Rocamora pablojoserocamora@gmail.com
-   @date 13/11/2016
+   @date 14/12/2016
 */
 
 /** Lista de comandos para mandar a botfather
@@ -126,7 +126,7 @@ void show_start(String chat_id) {
   msg += "/get_timer : Obtienes el tiempo restante para que se active el temporizador \n";
   msg += "/set_timer : Activas el temporizador para una accion en x tiempo \n";
   msg += "/help : Muestra la ayuda \n";
-
+  msg += "Version 1.0 \n";
   genera_teclado(chat_id, msg);
 }
 
@@ -145,7 +145,7 @@ void set_rele(String accion, String chat_id) {
 
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
   if (accion.length() == 0) {
-    String msg = "Que acción que deseas hacer con el rele?\n";
+    String msg = "Que accion que deseas hacer con el rele?\n";
     msg += "/set_rele on : Encender el rele\n";
     msg += "/set_rele off : Apagar el rele\n";
     msg += "/exit : Cancelar la accion de cambio del rele\n";
@@ -198,7 +198,7 @@ void set_timer(String accion, int tiempo, String chat_id) {
 
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
   if (accion.length() == 0) {
-    String msg = "Que acción que deseas hacer con el temporizador?";
+    String msg = "Que accion que deseas hacer con el temporizador?";
 
     String fila1 = "[\"/set_timer on 1\", \"/set_timer on 10\", \"/set_timer on 30\"],";
     String fila2 = "[\"/set_timer off 1\", \"/set_timer off 10\", \"/set_timer off 30\"],";
