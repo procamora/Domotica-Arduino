@@ -229,7 +229,7 @@ void set_timer(String accion, int tiempo, String chat_id) {
     msg = "Que accion que deseas hacer con el temporizador?";
 
     String fila1 = "[\"/set_timer on 15\", \"/set_timer on 30\", \"/set_timer on 60\"],";
-    String fila2 = "[\"/set_timer off 15\", \"/set_timer off30\", \"/set_timer off 60\"],";
+    String fila2 = "[\"/set_timer off 15\", \"/set_timer off 30\", \"/set_timer off 60\"],";
     String fila3 = "[\"/exit\"]";
     String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
 
