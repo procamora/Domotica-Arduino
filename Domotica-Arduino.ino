@@ -1,9 +1,9 @@
 /**
-   @file Domotica-Arduino.cpp
-   @brief Gestion de un rele a traves de telegram
+  @file Domotica-Arduino.cpp
+  @brief Gestion de un rele a traves de telegram
 
-   @author Pablo Rocamora pablojoserocamora@gmail.com
-   @date 14/12/2016
+  @author Pablo Rocamora pablojoserocamora@gmail.com
+  @date 14/12/2016
 */
 
 /** Lista de comandos para mandar a botfather
@@ -37,9 +37,9 @@
 #define ANALOG_TEMP A0
 
 #define TAM_ARRAY 3  // array de string que se le pasa por referencia
-#define TIEMPO_ESPERA_MSG 1000 //mean time between scan messages
-#define CONTADOR_MAX 10  //tiempo(30seg) para checkear el modo automatico
-#define CONTADOR_WARNING 1800  //tiempo(30min) para mandar un msg
+#define TIEMPO_ESPERA_MSG 1500 // mean time between scan messages
+#define CONTADOR_MAX 15  // tiempo(30seg) para checkear el modo automatico
+#define CONTADOR_WARNING 2400  // tiempo(60min) para mandar un msg, bucle se ejecuta cada 1.5seg, 3600/1.5 = 2400
 #define BOTtoken API_BOT  // token bot
 
 #define TIEMPO 0, 0, 0, 1, 1, 1970  //siempre que iniciamos el contador empezados desde la misma fecha
@@ -63,6 +63,10 @@ typedef struct {
 timers_globales global_timer;
 
 
+/**
+  @brief funcion para establecer la configuracion wifi.
+
+*/
 void conecta_wifi() {
   Serial.begin(115200);
   Serial.println();
@@ -80,6 +84,10 @@ void conecta_wifi() {
 }
 
 
+/**
+  @brief funcion para establecer la configuracion inicial.
+
+*/
 void setup() {
   pinMode(RELE_UNO, OUTPUT);
   pinMode(LED_FRIO, OUTPUT);
@@ -94,18 +102,28 @@ void setup() {
 }
 
 
-// IMPORTANTE TIENE QUE ESTAR CONECTADO AL 3.3V EN Wemos D1 R2
+/**
+  @brief funcion para obtener la temperatura. En la Wemos D1 R2 tiene que estar conectado a la entrada de 3.3V.
+
+  @return double con la temperatura calculada
+*/
 double calculaTemperatura() {
   int RawADC = analogRead(ANALOG_TEMP);
-  double Temp;
-  Temp = log(10000.0 * ((1024.0 / RawADC - 1)));
-  Temp = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * Temp * Temp )) * Temp );
-  Temp = Temp - 273.15;            // Convert Kelvin to Celcius
-  //Temp = (Temp * 9.0)/ 5.0 + 32.0; // Convert Celcius to Fahrenheit
-  return Temp;
+  double temp;
+  temp = log(10000.0 * ((1024.0 / RawADC - 1)));
+  temp = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * temp * temp )) * temp );
+  temp = temp - 273.15;            // Convert Kelvin to Celcius
+  //temp = (temp * 9.0)/ 5.0 + 32.0; // Convert Celcius to Fahrenheit
+  return temp;
 }
 
 
+/**
+  @brief funcion para generar el teclado por defecto al mandar un mensaje.
+
+  @param chat_id String id del usuario al que manda un mensaje
+  @param msg String con el mensaje a enviar
+*/
 void genera_teclado(String chat_id, String msg) {
   String fila1 = "[\"/set_rele\", \"/get_rele\", \"/get_temp\"],";
   String fila2 = "[\"/set_timer\", \"/get_timer\", \"/modo_automatico\"],";
@@ -117,10 +135,10 @@ void genera_teclado(String chat_id, String msg) {
 
 
 /**
-   @brief funcion para mandar un mensaje con todos los comandos disponibles
-   Importante: el formateo tiene que ser HTML para que funcione el _, en markdown no funciona
+  @brief funcion para mandar un mensaje con todos los comandos disponibles.
+  Importante: el formateo tiene que ser HTML para que funcione el _, en markdown no funciona.
 
-   @param chat_id String id del usuario al que manda un mensaje
+  @param chat_id String id del usuario al que manda un mensaje
 */
 void show_start(String chat_id) {
   String msg = "Bienvenido al BOT de Pablo para la gestion de temperatura\n";
@@ -138,16 +156,17 @@ void show_start(String chat_id) {
 
 
 /**
-   @brief funcion para activar un rele, si se pasa sin ninguna accion crea botones con las acciones.
+  @brief funcion para activar un rele, si se pasa sin ninguna accion crea botones con las acciones.
 
-   @param accion String opcion para el rele: on - off
-   @param chat_id String id del usuario al que manda un mensaje
+  @param accion String opcion para el rele: on - off
+  @param chat_id String id del usuario al que manda un mensaje
 */
-void set_rele(String accion, String chat_id) {
+void set_rele(String accion, String chat_id, String msgOpcional = "") {
   if (MODO_DEBUG) {
     Serial.println(accion);
     Serial.println(accion.length());
   }
+
   String msg = "parametro de /set_rele incorecto\nUso: /set_rele on";
 
   //imprimimos mensaje dependiendo de si ha acabado o espera el parametro
@@ -171,15 +190,18 @@ void set_rele(String accion, String chat_id) {
       msg = "Apagada calefaccion";
 
     }
-    genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
+    if (msgOpcional.length() == 0)
+      genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
+    else
+      genera_teclado(chat_id, msgOpcional); //mando mensaje + pongo nuevo teclado
   }
 }
 
 
 /**
-   @brief funcion para obtener el estado del pin al que esta conectado el rele.
+  @brief funcion para obtener el estado del pin al que esta conectado el rele.
 
-   @return boolean digitalRead retorna 1 si esta activa y se convierte a true
+  @return boolean digitalRead retorna 1 si esta activa y se convierte a true
 */
 bool get_rele() {
   return bool(digitalRead(RELE_UNO));
@@ -187,12 +209,12 @@ bool get_rele() {
 
 
 /**
-   @brief funcion para activar un temporizador con una accion para el rele,
-   si se pasa sin ninguna accion crea botones con las acciones.
+  @brief funcion para activar un temporizador con una accion para el rele,
+  si se pasa sin ninguna accion crea botones con las acciones.
 
-   @param accion String opcion para el rele: on - off
-   @param tiempo int tiempo en minutos antes de que sale el temporizador
-   @param chat_id String id del usuario al que manda un mensaje
+  @param accion String opcion para el rele: on - off
+  @param tiempo int tiempo en minutos antes de que sale el temporizador
+  @param chat_id String id del usuario al que manda un mensaje
 */
 void set_timer(String accion, int tiempo, String chat_id) {
   global_timer.timer = tiempo;
@@ -224,10 +246,10 @@ void set_timer(String accion, int tiempo, String chat_id) {
 
 
 /**
-   @brief funcion para obtener el tiempo restante de temporizador, va de 0 a 99 no de 0 a 59.
-   Esta funcion solo es llamada si global_timer.activo esta a true
+  @brief funcion para obtener el tiempo restante de temporizador, va de 0 a 99 no de 0 a 59.
+  Esta funcion solo es llamada si global_timer.activo esta a true.
 
-   @return String con el tiempo que falta para que salte el timer
+  @return String con el tiempo que falta para que salte el timer
 */
 String get_timer() {
   time_t temporalhoraFinal = now();
@@ -238,6 +260,32 @@ String get_timer() {
 }
 
 
+/**
+  @brief funcion para checkear si hay que ejecutar alguna accion con el temporizador.
+
+*/
+void check_timer() {
+  //global_timer.timer != 0 => para que si lo ejecuto sin argumentos no entre en la funcion y se active
+  if (global_timer.activo && global_timer.timer != 0) {
+    if (MODO_DEBUG)
+      Serial.println(get_timer()[0]);
+
+    if (get_timer()[0] == '-') {  //si el numero es negativo salta, como mucho se deberia tratarsar 1.5seg
+      Serial.println("entrado temporizador");
+      set_rele(global_timer.accion_timer, String(ID_TELEGRAM));  //ejecuto accion en rele
+      global_timer.activo = false;
+    }
+  }
+}
+
+
+/**
+  @brief funcion para activar/desactivar el modo automatico
+
+  @param accion String opcion para del modo automatico: on - off
+  @param temperatura String temperatura maxima a la que esperamos llegar
+  @param chat_id String id del usuario al que manda un mensaje
+*/
 void modo_automatico(String accion, String temperatura, String chat_id) {
   String msg = "Parametro de /modo_automatico incorrecto\nUso:/modo_automatico on 26";
 
@@ -255,6 +303,8 @@ void modo_automatico(String accion, String temperatura, String chat_id) {
   else {
     if (accion  == "off") {
       global_timer.modo_automatico = false;
+      global_timer.contador_max = 0;
+      global_timer.contador_warning = 0;
       msg = "Modo automatico apagado";
     }
     else if (accion  == "on") {
@@ -269,12 +319,50 @@ void modo_automatico(String accion, String temperatura, String chat_id) {
   }
 }
 
-/**
-   @brief funcion para parsear un string y dejar el resultado en un array,
-   parsea el comando y 2 argumentos como maximo
 
-   @param comando String a parsear
-   @param arrays[TAM_ARRAY] array de string que se le pasa por referencia
+/**
+  @brief funcion para checkear si hay que ejecutar alguna accion con el modo automatico.
+
+*/
+void check_modo_automatico() {
+  if (global_timer.modo_automatico) {
+    global_timer.contador_max++;
+    global_timer.contador_warning++;
+
+    // salta cada 30 min (1800seg), bucle se ejecuta cada 1.5seg, 1800/1.5 = 1200
+    if (global_timer.contador_warning == CONTADOR_WARNING) {
+      bot.sendSimpleMessage(String(ID_TELEGRAM), "Modo automatico sigue activo", "HTML");
+      global_timer.contador_warning = 0;
+    }
+
+    if (global_timer.contador_max == CONTADOR_MAX) {
+      global_timer.contador_max = 0;
+      float temp = calculaTemperatura();
+      if (MODO_DEBUG)
+        Serial.println("Temperatura: " + String(temp));
+
+      if (get_rele()) { //si esta encendido compruebo si supero la temperatura maxima
+        if (temp > global_timer.temperatura_max) {
+          String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nApagar";
+          set_rele("off", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+        }
+      }
+      else //si esta apagado compruebo que la temperatura no sea inferior a la maxima menos 1
+        if (temp < global_timer.temperatura_max - 1) {
+          String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nEncender";
+          set_rele("on", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+        }
+    }
+  }
+}
+
+
+/**
+  @brief funcion para parsear un string y dejar el resultado en un array,
+  parsea el comando y 2 argumentos como maximo
+
+  @param comando String a parsear
+  @param arrays[TAM_ARRAY] array de string que se le pasa por referencia
 */
 void parseaComando(String comando, String arrays[TAM_ARRAY]) {
   char delimitador = ' ';
@@ -294,6 +382,11 @@ void parseaComando(String comando, String arrays[TAM_ARRAY]) {
 }
 
 
+/**
+  @brief funcion para tratar todos los mensajes recibidos, es la funcion principal del programa.
+
+  @param numNewMessages int numero de mensajes
+*/
 void botTrataMensajes(int numNewMessages) {
   for (int i = 0; i < numNewMessages; i++) {
 
@@ -374,6 +467,25 @@ void botTrataMensajes(int numNewMessages) {
 }
 
 
+/**
+  @brief funcion para checkear si hay que ejecutar alguna accion con el modo automatico.
+
+*/
+void check_telegram_msg() {
+  int numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
+  while (numNewMessages) {
+    //Serial.println("got response");
+    botTrataMensajes(numNewMessages);
+    numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
+  }
+}
+
+
+/**
+  @brief funcion establecer los colores de los led segun la temperatura,
+
+  @param temperatura float que usaremos para ajustar los colores del led
+*/
 void ajustaLedTemperatura(float temperatura) {
   if (temperatura > TEMP_CALOR) {
     digitalWrite(LED_FRIO, LOW);
@@ -393,63 +505,21 @@ void ajustaLedTemperatura(float temperatura) {
 }
 
 
+/**
+  @brief bucle principal
+
+*/
 void loop() {
   if (millis() > global_timer.tiempoActual + TIEMPO_ESPERA_MSG)  {
     global_timer.tiempoActual = millis();
 
     //TRATAMIENTO MODO PROGRAMADO
-    //global_timer.timer != 0 => para que si lo ejecuto sin argumentos no entre en la funcion y se active
-    if (global_timer.activo && global_timer.timer != 0) {
-      if (MODO_DEBUG)
-        Serial.println(get_timer()[0]);
-
-      if (get_timer()[0] == '-') {  //si el numero es negativo salta, como mucho se deberia tratarsar 1.5seg
-        Serial.println("entrado temporizador");
-        set_rele(global_timer.accion_timer, String(ID_TELEGRAM));  //ejecuto accion en rele
-        global_timer.activo = false;
-      }
-    }
-
+    check_timer();
 
     //TRATAMIENTO MODO AUTOMATICO
-    if (global_timer.modo_automatico) {
-      global_timer.contador_max++;
-      global_timer.contador_warning++;
-
-      // salta cada 30 min (1800seg), bucle se ejecuta cada 1seg, 1800/1 = 1800
-      if (global_timer.contador_warning == CONTADOR_WARNING) {
-        bot.sendSimpleMessage(String(ID_TELEGRAM), "Modo automatico sigue activo", "HTML");
-        global_timer.contador_warning = 0;
-      }
-
-      if (global_timer.contador_max == CONTADOR_MAX) {
-        global_timer.contador_max = 0;
-        float temp = calculaTemperatura();
-        if (MODO_DEBUG)
-          Serial.println("Temperatura: " + String(temp));
-
-        if (get_rele()) { //si esta encendido compruebo si supero la temperatura maxima
-          if (temp > global_timer.temperatura_max) {
-            bot.sendSimpleMessage(String(ID_TELEGRAM), "Automatico: temperatura actual: " + String(temp) + "*C" , "HTML");
-            set_rele("off", String(ID_TELEGRAM));  //ejecuto accion en rele
-          }
-        }
-        else //si esta apagado compruebo que la temperatura no sea inferior a la maxima menos 1
-          if (temp < global_timer.temperatura_max - 1) {
-            bot.sendSimpleMessage(String(ID_TELEGRAM), "Automatico: temperatura actual: " + String(temp) + "*C" , "HTML");
-            set_rele("on", String(ID_TELEGRAM));  //ejecuto accion en rele
-          }
-      }
-    }
-
+    check_modo_automatico();
 
     //TRATAMIENTO BOT TELEGRAM
-    int numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
-    while (numNewMessages) {
-      //Serial.println("got response");
-      botTrataMensajes(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_recived + 1);
-    }
-
+    check_telegram_msg();
   }
 }
