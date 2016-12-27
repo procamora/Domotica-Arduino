@@ -344,13 +344,19 @@ void check_modo_automatico() {
       if (get_rele()) { //si esta encendido compruebo si supero la temperatura maxima
         if (temp > global_timer.temperatura_max) {
           String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nApagar";
-          set_rele("off", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+          if (MODO_DEBUG)
+            set_rele("off", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+          else //Sino es modo debug solo acciono el rele sin mandar telegram
+            digitalWrite(RELE_UNO, LOW);
         }
       }
       else //si esta apagado compruebo que la temperatura no sea inferior a la maxima menos 1
         if (temp < global_timer.temperatura_max - 1) {
           String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nEncender";
-          set_rele("on", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+          if (MODO_DEBUG)
+            set_rele("on", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
+          else
+            digitalWrite(RELE_UNO, HIGH);
         }
     }
   }
