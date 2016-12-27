@@ -228,8 +228,8 @@ void set_timer(String accion, int tiempo, String chat_id) {
   if (accion.length() == 0) {
     msg = "Que accion que deseas hacer con el temporizador?";
 
-    String fila1 = "[\"/set_timer on 1\", \"/set_timer on 10\", \"/set_timer on 30\"],";
-    String fila2 = "[\"/set_timer off 1\", \"/set_timer off 10\", \"/set_timer off 30\"],";
+    String fila1 = "[\"/set_timer on 15\", \"/set_timer on 30\", \"/set_timer on 60\"],";
+    String fila2 = "[\"/set_timer off 15\", \"/set_timer off30\", \"/set_timer off 60\"],";
     String fila3 = "[\"/exit\"]";
     String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
 
@@ -259,7 +259,7 @@ String get_timer() {
   return String(restasteMin) + "min " + String(restanteSeg) + "seg";
 }
 
-
+void modo_automatico(String accion, String temperatura, String chat_id);
 /**
   @brief funcion para checkear si hay que ejecutar alguna accion con el temporizador.
 
@@ -274,6 +274,8 @@ void check_timer() {
       Serial.println("entrado temporizador");
       set_rele(global_timer.accion_timer, String(ID_TELEGRAM));  //ejecuto accion en rele
       global_timer.activo = false;
+      if (global_timer.accion_timer == "off")
+        modo_automatico("off", "", String(ID_TELEGRAM));
     }
   }
 }
@@ -294,7 +296,7 @@ void modo_automatico(String accion, String temperatura, String chat_id) {
     msg = "Que accion que deseas hacer con el modo automatico?";
 
     String fila1 = "[\"/modo_automatico on 22\", \"/modo_automatico on 24\", \"/modo_automatico on 26\"],";
-    String fila2 = "[\"/modo_automatico off\"],";
+    String fila2 = "[\"/modo_automatico off\", \"/get_modo_automatico\"],";
     String fila3 = "[\"/exit\"]";
     String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
 
@@ -447,6 +449,14 @@ void botTrataMensajes(int numNewMessages) {
       else if (parse_comandos[0] == "/modo_automatico")
         modo_automatico(parse_comandos[1], parse_comandos[2], chat_id);
 
+      else if (parse_comandos[0] == "/get_modo_automatico") {
+        String msg;
+        if (global_timer.modo_automatico)
+          msg =  "Modo automatico activado";
+        else
+          msg = "Modo automatico desactivado";
+        genera_teclado(chat_id, msg);
+      }
       else if (parse_comandos[0] == "/start") {
         bot.sendMessage(chat_id, "Entras en modo Administrador", "");
         show_start(chat_id);
