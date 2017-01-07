@@ -39,7 +39,7 @@
 #define TAM_ARRAY 3  // array de string que se le pasa por referencia
 #define TIEMPO_ESPERA_MSG 1500 // mean time between scan messages
 #define CONTADOR_MAX 15  // tiempo(30seg) para checkear el modo automatico
-#define CONTADOR_WARNING 2400  // tiempo(60min) para mandar un msg, bucle se ejecuta cada 1.5seg, 3600/1.5 = 2400
+#define CONTADOR_WARNING 4800  // tiempo(60min)*2 para mandar un msg, bucle se ejecuta cada 1.5seg, 3600/1.5 = 2400 * 2 
 #define BOTtoken API_BOT  // token bot
 
 #define TIEMPO 0, 0, 0, 1, 1, 1970  //siempre que iniciamos el contador empezados desde la misma fecha
@@ -228,8 +228,8 @@ void set_timer(String accion, int tiempo, String chat_id) {
   if (accion.length() == 0) {
     msg = "Que accion que deseas hacer con el temporizador?";
 
-    String fila1 = "[\"/set_timer on 15\", \"/set_timer on 30\", \"/set_timer on 60\"],";
-    String fila2 = "[\"/set_timer off 15\", \"/set_timer off 30\", \"/set_timer off 60\"],";
+    String fila1 = "[\"/set_timer on 15\", \"/set_timer on 30\", \"/set_timer on 59\"],";
+    String fila2 = "[\"/set_timer off 15\", \"/set_timer off 30\", \"/set_timer off 59\"],";
     String fila3 = "[\"/exit\"]";
     String keyboardJson = "[" + fila1 + fila2  + fila3 + "]";
 
@@ -345,6 +345,7 @@ void check_modo_automatico() {
 
       if (get_rele()) { //si esta encendido compruebo si supero la temperatura maxima
         if (temp > global_timer.temperatura_max) {
+          global_timer.contador_max = -(CONTADOR_MAX * 4); //si hay un cambio espero -(15*4) = 60seg al menos en ese estado
           String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nApagar";
           if (MODO_DEBUG)
             set_rele("off", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
@@ -352,8 +353,9 @@ void check_modo_automatico() {
             digitalWrite(RELE_UNO, LOW);
         }
       }
-      else //si esta apagado compruebo que la temperatura no sea inferior a la maxima menos 1
-        if (temp < global_timer.temperatura_max - 1) {
+      else //si esta apagado compruebo que la temperatura no sea inferior a la maxima menos 1.5
+        if (temp < global_timer.temperatura_max - 1.5) {
+          global_timer.contador_max = -(CONTADOR_MAX * 4); //si hay un cambio espero -(15*4) = 60seg al menos en ese estado
           String msg = "Automatico: temperatura actual: " + String(temp) + "*C\nEncender";
           if (MODO_DEBUG)
             set_rele("on", String(ID_TELEGRAM), msg);  //ejecuto accion en rele
