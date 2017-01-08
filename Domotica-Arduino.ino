@@ -16,49 +16,15 @@
   help - Muestra la ayuda
 */
 
-#include <math.h>  //necesario para calcular temperatura
-#include <ESP8266WiFi.h>
-#include <WiFiClientSecure.h>
-#include "UniversalTelegramBot.h"  //https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
-#include <stdarg.h>
-#include <Time.h> //http://www.leantec.es/blog/42_Como-medir-el-tiempo-con-Arduino-y-la-librer%C3%AD.html
-
+#include "Domotica-Arduino.h"
 #include "credentials.h"  // todos los valores son String
 
 #define MODO_DEBUG false
-
-// Pines de la arduino y temperatura
-#define RELE_UNO D4
-#define LED_NORMAL D6
-#define TEMP_CALOR 25.0
-#define LED_CALOR D7
-#define TEMP_FRIO 17.0
-#define LED_FRIO D8
-#define ANALOG_TEMP A0
-
-#define TAM_ARRAY 3  // array de string que se le pasa por referencia
-#define TIEMPO_ESPERA_MSG 1500 // mean time between scan messages
-#define CONTADOR_MAX 15  // tiempo(30seg) para checkear el modo automatico
-#define CONTADOR_WARNING 4800  // tiempo(60min)*2 para mandar un msg, bucle se ejecuta cada 1.5seg, 3600/1.5 = 2400 * 2 
-#define BOTtoken API_BOT  // token bot
-
-#define TIEMPO 0, 0, 0, 1, 1, 1970  //siempre que iniciamos el contador empezados desde la misma fecha
 
 // Inicializamos Telegram BOT
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOTtoken, client);
 
-typedef struct {
-  unsigned long tiempoActual;   //last time messages' scan has been done
-  bool activo;
-  unsigned long timer;  //tiempo
-  time_t horaInicial; //variable que lleva la hora
-  String accion_timer; //on - off
-  boolean modo_automatico;  //modo automatico para la temperatura
-  int temperatura_max;  //temperatura maxima para el modo automatico
-  int contador_max; //contador para que se ejecute el modo automatico cada 15seg
-  int contador_warning; //contador para envios periodicos mientras este activo modo automatico
-} timers_globales;
 
 timers_globales global_timer;
 
@@ -161,7 +127,7 @@ void show_start(String chat_id) {
   @param accion String opcion para el rele: on - off
   @param chat_id String id del usuario al que manda un mensaje
 */
-void set_rele(String accion, String chat_id, String msgOpcional = "") {
+void set_rele(String accion, String chat_id, String msgOpcional) {
   if (MODO_DEBUG) {
     Serial.println(accion);
     Serial.println(accion.length());
@@ -259,7 +225,7 @@ String get_timer() {
   return String(restasteMin) + "min " + String(restanteSeg) + "seg";
 }
 
-void modo_automatico(String accion, String temperatura, String chat_id);
+
 /**
   @brief funcion para checkear si hay que ejecutar alguna accion con el temporizador.
 
@@ -272,7 +238,7 @@ void check_timer() {
 
     if (get_timer()[0] == '-') {  //si el numero es negativo salta, como mucho se deberia tratarsar 1.5seg
       Serial.println("entrado temporizador");
-      set_rele(global_timer.accion_timer, String(ID_TELEGRAM));  //ejecuto accion en rele
+      set_rele(global_timer.accion_timer, String(ID_TELEGRAM), "");  //ejecuto accion en rele
       global_timer.activo = false;
       if (global_timer.accion_timer == "off")
         modo_automatico("off", "", String(ID_TELEGRAM));
@@ -427,7 +393,7 @@ void botTrataMensajes(int numNewMessages) {
         bot.sendMessage(chat_id, "La temperatura es: " + String(calculaTemperatura()) + "*C", "");
 
       else if (parse_comandos[0] == "/set_rele")
-        set_rele(parse_comandos[1], chat_id);
+        set_rele(parse_comandos[1], chat_id, "");
 
       else if (parse_comandos[0] == "/get_rele") {
         String msg;
