@@ -152,9 +152,9 @@ void set_rele(String accion, String chat_id, String msgOpcional) {
       msg = "Encendida calefaccion";
     }
     else if (accion == "off") {
+      modo_automatico("off", "", String(ID_TELEGRAM)); //desactivamos modo automatico
       digitalWrite(RELE_UNO, LOW);    // turn the LED off (LOW is the voltage level)
       msg = "Apagada calefaccion";
-
     }
     if (msgOpcional.length() == 0)
       genera_teclado(chat_id, msg); //mando mensaje + pongo nuevo teclado
